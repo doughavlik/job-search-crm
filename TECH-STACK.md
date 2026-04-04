@@ -22,7 +22,7 @@ Supabase Auth (email/password) for the web UI. Row Level Security on all tables.
 GitHub Pages (static, free). Auto-deploys on push to `main`.
 
 ## Email Notifications
-Python script (run via GitHub Actions scheduled workflow, free tier) sends follow-up reminder emails via Gmail SMTP using a Google App Password. No separate email service required.
+Python script (run via GitHub Actions scheduled workflow, free tier) sends a **weekly digest every Monday morning** listing all contacts due or overdue for a meeting that week. Sent via Gmail SMTP using a Google App Password. No separate email service required.
 
 ## AI Agent Access
 Supabase REST API + documented schema allows Claude (or any agent) to:

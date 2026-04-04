@@ -8,6 +8,7 @@
 ## Contacts List (Home Screen)
 - Contacts sorted by urgency: overdue for meeting shown first, then by last-conversation date (oldest first).
 - Each contact card shows: name, company, last conversation date, "X weeks ago", and a visual overdue indicator (e.g. red dot) if past 6-week threshold.
+- Each contact card includes a one-tap **"I just talked to [name]"** quick-capture button that opens a blank note with today's date pre-filled. This is the primary mobile action and must be prominently accessible without navigating to the contact detail view.
 
 ## Note Entry
 - Dedicated note screen per contact — minimal UI, just a text area and a date field (defaulting to today).

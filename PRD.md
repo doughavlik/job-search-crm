@@ -21,13 +21,18 @@ A lightweight, mobile-first CRM for managing job search networking — tracking 
 - Auto-save drafts: notes persist locally on the device until explicitly submitted, so crashes, timeouts, or disconnections do not cause data loss
 
 ### Follow-up Alerts
-- Email sent to user when a contact is due for a meeting (6-week cadence)
-- Email includes: contact info, days overdue for the flagged contact, and a list of all other overdue contacts with days overdue each
+- Weekly digest email sent every Monday morning listing all contacts due or overdue for a meeting that week
+- Email includes: each flagged contact, days overdue (or due this week), and a summary count of overdue contacts
 - Sent via Gmail using Google App Password
+
+### Conversation Quick-Capture
+- Each contact card has a one-tap "I just talked to [name]" button
+- Tapping it opens a blank note screen for that contact with today's date pre-filled
+- Reduces friction for the most common mobile action: logging a conversation immediately after it happens
 
 ### AI / Agent Access
 - All data stored in Supabase (PostgreSQL) with clean schema
-- Supabase project URL and API key documented so Claude or other agents can query contact and conversation history directly via REST API
+- Supabase project URL and API key documented in `CLAUDE.md` with full table schema and example queries, so Claude or other agents can query contact and conversation history directly via REST API from any session without re-explaining the schema
 - Enables AI-generated outputs (e.g. thank-you emails) referencing stored data
 
 ## Users

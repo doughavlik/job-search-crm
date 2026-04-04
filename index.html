@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Job Search CRM</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --danger: #dc2626;
+    --success: #16a34a;
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-400: #9ca3af;
+    --gray-600: #4b5563;
+    --gray-800: #1f2937;
+    --overdue: #fef2f2;
+    --overdue-border: #fca5a5;
+    --radius: 12px;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 16px;
+    background: var(--gray-50);
+    color: var(--gray-800);
+    min-height: 100vh;
+    padding-bottom: calc(64px + var(--safe-bottom));
+  }
+  .screen { display: none; max-width: 480px; margin: 0 auto; padding: 16px; }
+  .screen.active { display: block; }
+
+  /* Login */
+  #login-screen {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; min-height: 100vh; gap: 24px;
+    padding: 32px 24px;
+  }
+  #login-screen h1 { font-size: 1.75rem; font-weight: 700; }
+  #login-screen p { color: var(--gray-600); text-align: center; }
+
+  /* Forms */
+  .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  label { font-size: 14px; font-weight: 500; color: var(--gray-600); }
+  input, textarea, select {
+    width: 100%; padding: 12px 14px; border: 1.5px solid var(--gray-200);
+    border-radius: 8px; font-size: 16px; background: white;
+    outline: none; transition: border-color 0.15s;
+    -webkit-appearance: none;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--primary); }
+  textarea { min-height: 140px; resize: vertical; line-height: 1.5; }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 12px 20px; border-radius: 8px; font-size: 16px;
+    font-weight: 600; cursor: pointer; border: none;
+    min-height: 48px; touch-action: manipulation;
+    transition: opacity 0.15s;
+  }
+  .btn:active { opacity: 0.8; }
+  .btn-primary { background: var(--primary); color: white; width: 100%; }
+  .btn-secondary { background: var(--gray-100); color: var(--gray-800); width: 100%; }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-sm {
+    padding: 8px 14px; font-size: 14px; min-height: 36px;
+    border-radius: 6px; font-weight: 500;
+  }
+  .btn-quick {
+    background: #eff6ff; color: var(--primary);
+    border: 1.5px solid #bfdbfe; width: 100%;
+    margin-top: 10px; font-size: 14px; font-weight: 500;
+    padding: 10px 14px; border-radius: 8px; min-height: 44px;
+  }
+
+  /* Header */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 0 12px;
+  }
+  .header h2 { font-size: 1.25rem; font-weight: 700; }
+  .header-actions { display: flex; gap: 8px; }
+
+  /* Cards */
+  .card {
+    background: white; border-radius: var(--radius);
+    border: 1.5px solid var(--gray-200); padding: 16px;
+    margin-bottom: 12px;
+  }
+  .card.overdue { background: var(--overdue); border-color: var(--overdue-border); }
+  .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .card-name { font-size: 17px; font-weight: 600; line-height: 1.3; }
+  .card-company { font-size: 14px; color: var(--gray-600); margin-top: 2px; }
+  .card-meta { font-size: 13px; color: var(--gray-400); margin-top: 8px; }
+  .overdue-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--danger); flex-shrink: 0; margin-top: 4px;
+  }
+  .card-actions { display: flex; gap: 8px; margin-top: 12px; }
+
+  /* Nav */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: white; border-top: 1px solid var(--gray-200);
+    display: flex; padding-bottom: var(--safe-bottom);
+    max-width: 480px; margin: 0 auto;
+  }
+  .nav-btn {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    gap: 3px; padding: 10px 8px; border: none; background: none;
+    font-size: 11px; color: var(--gray-400); cursor: pointer;
+    min-height: 56px; touch-action: manipulation;
+  }
+  .nav-btn.active { color: var(--primary); }
+  .nav-icon { font-size: 22px; line-height: 1; }
+
+  /* Conversation history */
+  .convo-item { padding: 14px 0; border-bottom: 1px solid var(--gray-100); }
+  .convo-item:last-child { border-bottom: none; }
+  .convo-date { font-size: 13px; font-weight: 600; color: var(--gray-600); margin-bottom: 6px; }
+  .convo-note { font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+
+  /* Draft indicator */
+  .draft-status {
+    font-size: 12px; color: var(--success); margin-top: 4px;
+    min-height: 18px;
+  }
+
+  /* Misc */
+  .section-title { font-size: 13px; font-weight: 600; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+  .empty-state { text-align: center; color: var(--gray-400); padding: 48px 16px; font-size: 15px; }
+  .error-msg { color: var(--danger); font-size: 14px; margin-top: 8px; }
+  .success-msg { color: var(--success); font-size: 14px; margin-top: 8px; }
+  .loading { text-align: center; color: var(--gray-400); padding: 24px; }
+  .divider { height: 1px; background: var(--gray-100); margin: 16px 0; }
+  .tag { display: inline-block; background: #eff6ff; color: var(--primary); font-size: 12px; padding: 2px 8px; border-radius: 12px; font-weight: 500; }
+  .back-btn {
+    background: none; border: none; color: var(--primary); font-size: 16px;
+    padding: 4px 0; cursor: pointer; display: flex; align-items: center; gap: 4px;
+    min-height: 44px;
+  }
+  .field-row { display: flex; gap: 8px; }
+  .field-row .form-group { flex: 1; }
+  #login-screen { max-width: none; }
+  #login-screen .form-wrap { width: 100%; max-width: 360px; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <h1>Job Search CRM</h1>
+  <p>Track your networking contacts and conversations.</p>
+  <div class="form-wrap">
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" onclick="doLogin()">Sign In</button>
+    <div id="login-error" class="error-msg"></div>
+  </div>
+</div>
+
+<!-- MAIN APP (hidden until logged in) -->
+<div id="app" style="display:none">
+
+  <!-- CONTACTS LIST -->
+  <div id="screen-contacts" class="screen active">
+    <div class="header">
+      <h2>Contacts</h2>
+      <div class="header-actions">
+        <button class="btn btn-sm btn-secondary" onclick="signOut()">Sign out</button>
+      </div>
+    </div>
+    <div id="contacts-list"><div class="loading">Loading…</div></div>
+  </div>
+
+  <!-- COMPANIES LIST -->
+  <div id="screen-companies" class="screen">
+    <div class="header">
+      <h2>Companies</h2>
+      <button class="btn btn-sm btn-primary" onclick="showScreen('add-company')">+ Add</button>
+    </div>
+    <div id="companies-list"><div class="loading">Loading…</div></div>
+  </div>
+
+  <!-- ADD CONTACT -->
+  <div id="screen-add-contact" class="screen">
+    <div class="header">
+      <button class="back-btn" onclick="goBack()">← Back</button>
+      <h2 id="contact-form-title">Add Contact</h2>
+    </div>
+    <div class="form-group">
+      <label>Full Name *</label>
+      <input type="text" id="cf-name" placeholder="Jane Smith" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>Company</label>
+      <select id="cf-company">
+        <option value="">— None —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>LinkedIn URL</label>
+      <input type="url" id="cf-linkedin" placeholder="https://linkedin.com/in/..." autocomplete="off">
+    </div>
+    <div class="field-row">
+      <div class="form-group">
+        <label>Phone</label>
+        <input type="tel" id="cf-phone" placeholder="(555) 000-0000" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="cf-email" placeholder="jane@..." autocomplete="off">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Comments</label>
+      <textarea id="cf-comments" placeholder="Notes about this person…" rows="3"></textarea>
+    </div>
+    <div class="form-group" style="flex-direction:row;align-items:center;gap:12px;margin-bottom:24px">
+      <input type="checkbox" id="cf-followup" checked style="width:20px;height:20px;flex-shrink:0">
+      <label for="cf-followup" style="font-size:15px;color:var(--gray-800)">Propose meeting every 6 weeks</label>
+    </div>
+    <button class="btn btn-primary" id="contact-save-btn" onclick="saveContact()">Save Contact</button>
+    <div id="contact-form-msg" class="error-msg" style="margin-top:8px"></div>
+    <div id="delete-contact-area" style="display:none;margin-top:24px">
+      <div class="divider"></div>
+      <button class="btn btn-danger btn-sm" onclick="deleteContact()">Delete Contact</button>
+    </div>
+  </div>
+
+  <!-- CONTACT DETAIL -->
+  <div id="screen-contact-detail" class="screen">
+    <div class="header">
+      <button class="back-btn" onclick="goBack()">← Back</button>
+      <button class="btn btn-sm btn-secondary" onclick="editCurrentContact()">Edit</button>
+    </div>
+    <div id="contact-detail-body"></div>
+    <div class="divider"></div>
+    <div class="section-title">Conversations</div>
+    <button class="btn btn-primary" style="margin-bottom:16px" onclick="addNoteForCurrentContact()">+ Log Conversation</button>
+    <div id="conversations-list"></div>
+  </div>
+
+  <!-- ADD NOTE -->
+  <div id="screen-add-note" class="screen">
+    <div class="header">
+      <button class="back-btn" onclick="goBackFromNote()">← Back</button>
+      <h2 id="note-screen-title">Log Conversation</h2>
+    </div>
+    <div class="form-group">
+      <label>Date</label>
+      <input type="date" id="nf-date">
+    </div>
+    <div class="form-group">
+      <label>Notes</label>
+      <textarea id="nf-note" placeholder="What did you talk about?"></textarea>
+      <div id="note-draft-status" class="draft-status"></div>
+    </div>
+    <button class="btn btn-primary" onclick="saveNote()">Save to Supabase</button>
+    <div id="note-form-msg" class="error-msg" style="margin-top:8px"></div>
+  </div>
+
+  <!-- ADD COMPANY -->
+  <div id="screen-add-company" class="screen">
+    <div class="header">
+      <button class="back-btn" onclick="goBack()">← Back</button>
+      <h2>Add Company</h2>
+    </div>
+    <div class="form-group">
+      <label>Company Name *</label>
+      <input type="text" id="company-name-input" placeholder="Acme Corp" autocomplete="off">
+    </div>
+    <button class="btn btn-primary" onclick="saveCompany()">Save Company</button>
+    <div id="company-form-msg" class="error-msg" style="margin-top:8px"></div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" id="nav-contacts" onclick="showScreen('contacts')">
+      <span class="nav-icon">👥</span>Contacts
+    </button>
+    <button class="nav-btn" id="nav-companies" onclick="showScreen('companies')">
+      <span class="nav-icon">🏢</span>Companies
+    </button>
+    <button class="nav-btn" id="nav-add-contact" onclick="startAddContact()">
+      <span class="nav-icon">➕</span>Add Contact
+    </button>
+  </nav>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://ifzcegsompgglmxmqulc.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmemNlZ3NvbXBnZ2xteG1xdWxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MDkzMDksImV4cCI6MjA4OTE4NTMwOX0.akXCmDSJ_GNq7MD0PIPtQcRusIWlBuqpLvskjICvewQ';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ── State ─────────────────────────────────────────────────────────
+let currentContactId = null;
+let editingContactId = null;
+let noteContactId = null;
+let noteReturnScreen = 'contacts';
+let screenHistory = [];
+let companies = [];
+
+// ── Auth ─────────────────────────────────────────────────────────
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) { errEl.textContent = error.message; return; }
+  initApp();
+}
+
+async function signOut() {
+  await sb.auth.signOut();
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+sb.auth.onAuthStateChange((event, session) => {
+  if (session) initApp();
+});
+
+function initApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadCompanies().then(() => loadContacts());
+}
+
+// ── Screens ───────────────────────────────────────────────────────
+function showScreen(name, pushHistory = true) {
+  if (pushHistory && name !== 'contacts' && name !== 'companies') {
+    screenHistory.push(currentVisibleScreen());
+  }
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById('screen-' + name);
+  if (el) el.classList.add('active');
+
+  // Nav highlighting
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  if (name === 'contacts') document.getElementById('nav-contacts').classList.add('active');
+  if (name === 'companies') document.getElementById('nav-companies').classList.add('active');
+
+  // Load data for screens
+  if (name === 'contacts') { screenHistory = []; loadContacts(); }
+  if (name === 'companies') { screenHistory = []; loadCompanies(true); }
+}
+
+function currentVisibleScreen() {
+  const active = document.querySelector('.screen.active');
+  return active ? active.id.replace('screen-', '') : 'contacts';
+}
+
+function goBack() {
+  const prev = screenHistory.pop() || 'contacts';
+  showScreen(prev, false);
+  if (prev === 'contacts') loadContacts();
+  if (prev === 'companies') loadCompanies(true);
+  if (prev === 'contact-detail') loadContactDetail(currentContactId);
+}
+
+function goBackFromNote() {
+  goBack();
+}
+
+// ── Companies ─────────────────────────────────────────────────────
+async function loadCompanies(render = false) {
+  const { data } = await sb.from('71340_companies').select('*').order('name');
+  companies = data || [];
+  updateCompanySelect();
+  if (render) renderCompanies();
+}
+
+function updateCompanySelect() {
+  const sel = document.getElementById('cf-company');
+  sel.innerHTML = '<option value="">— None —</option>';
+  companies.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id; opt.textContent = c.name;
+    sel.appendChild(opt);
+  });
+}
+
+function renderCompanies() {
+  const el = document.getElementById('companies-list');
+  if (!companies.length) { el.innerHTML = '<div class="empty-state">No companies yet.</div>'; return; }
+  el.innerHTML = companies.map(c => `
+    <div class="card">
+      <div class="card-name">${esc(c.name)}</div>
+    </div>
+  `).join('');
+}
+
+async function saveCompany() {
+  const name = document.getElementById('company-name-input').value.trim();
+  const msg = document.getElementById('company-form-msg');
+  msg.textContent = '';
+  if (!name) { msg.textContent = 'Company name is required.'; return; }
+  const { error } = await sb.from('71340_companies').insert({ name });
+  if (error) { msg.style.color = 'var(--danger)'; msg.textContent = error.message; return; }
+  document.getElementById('company-name-input').value = '';
+  msg.style.color = 'var(--success)'; msg.textContent = 'Saved!';
+  await loadCompanies();
+  setTimeout(() => { msg.textContent = ''; goBack(); }, 700);
+}
+
+// ── Contacts ──────────────────────────────────────────────────────
+async function loadContacts() {
+  const el = document.getElementById('contacts-list');
+  el.innerHTML = '<div class="loading">Loading…</div>';
+  const { data, error } = await sb
+    .from('71340_contacts')
+    .select('*, company:71340_companies(name)')
+    .order('last_conversation_date', { ascending: true, nullsFirst: true });
+  if (error) { el.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+  if (!data.length) { el.innerHTML = '<div class="empty-state">No contacts yet. Add your first contact!</div>'; return; }
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const THRESHOLD_DAYS = 42;
+
+  // Sort: overdue first, then by last_conversation_date asc
+  const sorted = [...data].sort((a, b) => {
+    const aOverdue = isOverdue(a, today, THRESHOLD_DAYS);
+    const bOverdue = isOverdue(b, today, THRESHOLD_DAYS);
+    if (aOverdue && !bOverdue) return -1;
+    if (!aOverdue && bOverdue) return 1;
+    const aDate = a.last_conversation_date ? new Date(a.last_conversation_date) : new Date(0);
+    const bDate = b.last_conversation_date ? new Date(b.last_conversation_date) : new Date(0);
+    return aDate - bDate;
+  });
+
+  el.innerHTML = sorted.map(c => renderContactCard(c, today, THRESHOLD_DAYS)).join('');
+}
+
+function isOverdue(contact, today, threshDays) {
+  if (!contact.follow_up_flag) return false;
+  if (!contact.last_conversation_date) return true;
+  const last = new Date(contact.last_conversation_date);
+  const diffDays = Math.floor((today - last) / 86400000);
+  return diffDays >= threshDays;
+}
+
+function renderContactCard(c, today, threshDays) {
+  const overdue = isOverdue(c, today, threshDays);
+  let metaText = 'No conversations yet';
+  if (c.last_conversation_date) {
+    const last = new Date(c.last_conversation_date);
+    const days = Math.floor((today - last) / 86400000);
+    const weeks = Math.floor(days / 7);
+    metaText = `Last: ${formatDate(c.last_conversation_date)} · ${weeks === 0 ? 'this week' : weeks + ' week' + (weeks !== 1 ? 's' : '') + ' ago'}`;
+  }
+  const companyName = c.company ? c.company.name : '';
+
+  return `<div class="card ${overdue ? 'overdue' : ''}">
+    <div class="card-header">
+      <div style="flex:1">
+        <div class="card-name">${esc(c.full_name)}</div>
+        ${companyName ? `<div class="card-company">${esc(companyName)}</div>` : ''}
+        <div class="card-meta">${metaText}${overdue ? ' · <strong style="color:var(--danger)">Overdue</strong>' : ''}</div>
+      </div>
+      ${overdue ? '<div class="overdue-dot"></div>' : ''}
+    </div>
+    <div class="card-actions">
+      <button class="btn btn-sm btn-secondary" onclick="openContactDetail('${c.id}')">View</button>
+      <button class="btn btn-sm btn-secondary" onclick="editContact('${c.id}')">Edit</button>
+    </div>
+    <button class="btn btn-quick" onclick="quickCapture('${c.id}', '${esc(c.full_name)}')">
+      📝 I just talked to ${esc(c.full_name)}
+    </button>
+  </div>`;
+}
+
+function openContactDetail(id) {
+  currentContactId = id;
+  showScreen('contact-detail');
+  loadContactDetail(id);
+}
+
+async function loadContactDetail(id) {
+  const { data: c } = await sb.from('71340_contacts').select('*, company:71340_companies(name)').eq('id', id).single();
+  if (!c) return;
+
+  const detailEl = document.getElementById('contact-detail-body');
+  const companyName = c.company ? c.company.name : '';
+  detailEl.innerHTML = `
+    <h2 style="font-size:1.4rem;font-weight:700;margin-bottom:4px">${esc(c.full_name)}</h2>
+    ${companyName ? `<div style="color:var(--gray-600);margin-bottom:8px">${esc(companyName)}</div>` : ''}
+    ${c.linkedin_url ? `<div style="margin-bottom:6px"><a href="${esc(c.linkedin_url)}" target="_blank" style="color:var(--primary)">LinkedIn ↗</a></div>` : ''}
+    ${c.phone ? `<div style="margin-bottom:4px;color:var(--gray-600)">📞 ${esc(c.phone)}</div>` : ''}
+    ${c.email ? `<div style="margin-bottom:4px;color:var(--gray-600)">✉️ ${esc(c.email)}</div>` : ''}
+    ${c.comments ? `<div style="margin-top:12px;padding:12px;background:var(--gray-50);border-radius:8px;font-size:15px;line-height:1.5;white-space:pre-wrap">${esc(c.comments)}</div>` : ''}
+    ${c.follow_up_flag ? '<div style="margin-top:10px"><span class="tag">6-week follow-up on</span></div>' : ''}
+  `;
+
+  const { data: convos } = await sb.from('71340_conversations').select('*').eq('contact_id', id).order('date', { ascending: false });
+  const convoEl = document.getElementById('conversations-list');
+  if (!convos || !convos.length) {
+    convoEl.innerHTML = '<div class="empty-state" style="padding:24px 0">No conversations logged yet.</div>';
+  } else {
+    convoEl.innerHTML = convos.map(cv => `
+      <div class="convo-item">
+        <div class="convo-date">${formatDate(cv.date)}</div>
+        <div class="convo-note">${esc(cv.note)}</div>
+      </div>
+    `).join('');
+  }
+}
+
+function addNoteForCurrentContact() {
+  openNoteScreen(currentContactId, 'contact-detail');
+}
+
+function quickCapture(contactId, contactName) {
+  openNoteScreen(contactId, 'contacts');
+}
+
+function openNoteScreen(contactId, returnScreen) {
+  noteContactId = contactId;
+  noteReturnScreen = returnScreen;
+  // Set default date to today
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('nf-date').value = today;
+  // Load draft if exists
+  const draftKey = `note_draft_${contactId}`;
+  const draft = localStorage.getItem(draftKey);
+  document.getElementById('nf-note').value = draft || '';
+  document.getElementById('note-draft-status').textContent = draft ? 'Draft saved locally' : '';
+  document.getElementById('note-form-msg').textContent = '';
+
+  // Get contact name for title
+  sb.from('71340_contacts').select('full_name').eq('id', contactId).single().then(({ data }) => {
+    if (data) document.getElementById('note-screen-title').textContent = `Log: ${data.full_name}`;
+  });
+
+  showScreen('add-note');
+
+  // Auto-save on keystroke
+  const noteInput = document.getElementById('nf-note');
+  noteInput.oninput = () => {
+    localStorage.setItem(draftKey, noteInput.value);
+    document.getElementById('note-draft-status').textContent = noteInput.value ? 'Draft saved locally' : '';
+  };
+}
+
+async function saveNote() {
+  const note = document.getElementById('nf-note').value.trim();
+  const date = document.getElementById('nf-date').value;
+  const msg = document.getElementById('note-form-msg');
+  msg.textContent = '';
+  if (!note) { msg.style.color = 'var(--danger)'; msg.textContent = 'Note cannot be empty.'; return; }
+  if (!date) { msg.style.color = 'var(--danger)'; msg.textContent = 'Date is required.'; return; }
+
+  const { error } = await sb.from('71340_conversations').insert({ contact_id: noteContactId, note, date });
+  if (error) { msg.style.color = 'var(--danger)'; msg.textContent = error.message; return; }
+
+  // Update last_conversation_date on contact
+  await sb.from('71340_contacts').update({ last_conversation_date: date }).eq('id', noteContactId);
+
+  // Clear draft
+  localStorage.removeItem(`note_draft_${noteContactId}`);
+  document.getElementById('nf-note').value = '';
+  document.getElementById('note-draft-status').textContent = '';
+
+  msg.style.color = 'var(--success)'; msg.textContent = 'Saved!';
+  setTimeout(() => {
+    msg.textContent = '';
+    // Go back to the appropriate screen
+    if (noteReturnScreen === 'contact-detail') {
+      showScreen('contact-detail', false);
+      loadContactDetail(noteContactId);
+    } else {
+      showScreen('contacts', false);
+      screenHistory = [];
+      loadContacts();
+    }
+  }, 700);
+}
+
+// ── Contact Form ──────────────────────────────────────────────────
+function startAddContact() {
+  editingContactId = null;
+  document.getElementById('contact-form-title').textContent = 'Add Contact';
+  document.getElementById('cf-name').value = '';
+  document.getElementById('cf-company').value = '';
+  document.getElementById('cf-linkedin').value = '';
+  document.getElementById('cf-phone').value = '';
+  document.getElementById('cf-email').value = '';
+  document.getElementById('cf-comments').value = '';
+  document.getElementById('cf-followup').checked = true;
+  document.getElementById('contact-form-msg').textContent = '';
+  document.getElementById('delete-contact-area').style.display = 'none';
+  document.getElementById('contact-save-btn').textContent = 'Save Contact';
+  showScreen('add-contact');
+}
+
+function editContact(id) {
+  editingContactId = id;
+  sb.from('71340_contacts').select('*').eq('id', id).single().then(({ data: c }) => {
+    if (!c) return;
+    document.getElementById('contact-form-title').textContent = 'Edit Contact';
+    document.getElementById('cf-name').value = c.full_name || '';
+    document.getElementById('cf-company').value = c.company_id || '';
+    document.getElementById('cf-linkedin').value = c.linkedin_url || '';
+    document.getElementById('cf-phone').value = c.phone || '';
+    document.getElementById('cf-email').value = c.email || '';
+    document.getElementById('cf-comments').value = c.comments || '';
+    document.getElementById('cf-followup').checked = c.follow_up_flag !== false;
+    document.getElementById('contact-form-msg').textContent = '';
+    document.getElementById('delete-contact-area').style.display = 'block';
+    document.getElementById('contact-save-btn').textContent = 'Update Contact';
+    showScreen('add-contact');
+  });
+}
+
+function editCurrentContact() {
+  editContact(currentContactId);
+}
+
+async function saveContact() {
+  const name = document.getElementById('cf-name').value.trim();
+  const msg = document.getElementById('contact-form-msg');
+  msg.textContent = '';
+  if (!name) { msg.style.color = 'var(--danger)'; msg.textContent = 'Full name is required.'; return; }
+
+  const payload = {
+    full_name: name,
+    company_id: document.getElementById('cf-company').value || null,
+    linkedin_url: document.getElementById('cf-linkedin').value.trim() || null,
+    phone: document.getElementById('cf-phone').value.trim() || null,
+    email: document.getElementById('cf-email').value.trim() || null,
+    comments: document.getElementById('cf-comments').value.trim() || null,
+    follow_up_flag: document.getElementById('cf-followup').checked,
+  };
+
+  let error;
+  if (editingContactId) {
+    ({ error } = await sb.from('71340_contacts').update(payload).eq('id', editingContactId));
+  } else {
+    ({ error } = await sb.from('71340_contacts').insert(payload));
+  }
+
+  if (error) { msg.style.color = 'var(--danger)'; msg.textContent = error.message; return; }
+  msg.style.color = 'var(--success)'; msg.textContent = 'Saved!';
+  setTimeout(() => { msg.textContent = ''; goBack(); }, 700);
+}
+
+async function deleteContact() {
+  if (!confirm('Delete this contact and all their conversations?')) return;
+  await sb.from('71340_contacts').delete().eq('id', editingContactId);
+  showScreen('contacts', false);
+  screenHistory = [];
+  loadContacts();
+}
+
+// ── Helpers ───────────────────────────────────────────────────────
+function formatDate(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[parseInt(m,10)-1]} ${parseInt(d,10)}, ${y}`;
+}
+
+function esc(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+sb.auth.getSession().then(({ data }) => {
+  if (data?.session) initApp();
+});
+</script>
+</body>
+</html>
