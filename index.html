@@ -53,6 +53,10 @@
     -webkit-appearance: none;
   }
   input:focus, textarea:focus, select:focus { border-color: var(--primary); }
+  input[type="checkbox"] {
+    width: 20px; height: 20px; padding: 0; border-radius: 3px;
+    -webkit-appearance: checkbox; appearance: checkbox;
+  }
   textarea { min-height: 140px; resize: vertical; line-height: 1.5; }
 
   /* Buttons */
@@ -307,10 +311,12 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 // ── State ─────────────────────────────────────────────────────────
 let currentContactId = null;
 let editingContactId = null;
+let editingConvoId = null;
 let noteContactId = null;
 let noteReturnScreen = 'contacts';
 let screenHistory = [];
 let companies = [];
+let currentContactConvos = [];
 
 // ── Auth ─────────────────────────────────────────────────────────
 async function doLogin() {
@@ -505,13 +511,20 @@ async function loadContactDetail(id) {
   `;
 
   const { data: convos } = await sb.from('71340_conversations').select('*').eq('contact_id', id).order('date', { ascending: false });
+  currentContactConvos = convos || [];
   const convoEl = document.getElementById('conversations-list');
-  if (!convos || !convos.length) {
+  if (!currentContactConvos.length) {
     convoEl.innerHTML = '<div class="empty-state" style="padding:24px 0">No conversations logged yet.</div>';
   } else {
-    convoEl.innerHTML = convos.map(cv => `
+    convoEl.innerHTML = currentContactConvos.map(cv => `
       <div class="convo-item">
-        <div class="convo-date">${formatDate(cv.date)}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div class="convo-date">${formatDate(cv.date)}</div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-sm btn-secondary" onclick="editConvo('${cv.id}')">Edit</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteConvo('${cv.id}')">Delete</button>
+          </div>
+        </div>
         <div class="convo-note">${esc(cv.note)}</div>
       </div>
     `).join('');
@@ -527,8 +540,10 @@ function quickCapture(contactId, contactName) {
 }
 
 function openNoteScreen(contactId, returnScreen) {
+  editingConvoId = null;
   noteContactId = contactId;
   noteReturnScreen = returnScreen;
+  document.getElementById('note-screen-title').textContent = 'Log Conversation';
   // Set default date to today
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('nf-date').value = today;
@@ -562,11 +577,16 @@ async function saveNote() {
   if (!note) { msg.style.color = 'var(--danger)'; msg.textContent = 'Note cannot be empty.'; return; }
   if (!date) { msg.style.color = 'var(--danger)'; msg.textContent = 'Date is required.'; return; }
 
-  const { error } = await sb.from('71340_conversations').insert({ contact_id: noteContactId, note, date });
+  let error;
+  if (editingConvoId) {
+    ({ error } = await sb.from('71340_conversations').update({ note, date }).eq('id', editingConvoId));
+    editingConvoId = null;
+  } else {
+    ({ error } = await sb.from('71340_conversations').insert({ contact_id: noteContactId, note, date }));
+  }
   if (error) { msg.style.color = 'var(--danger)'; msg.textContent = error.message; return; }
 
-  // Update last_conversation_date on contact
-  await sb.from('71340_contacts').update({ last_conversation_date: date }).eq('id', noteContactId);
+  await updateLastConvoDate(noteContactId);
 
   // Clear draft
   localStorage.removeItem(`note_draft_${noteContactId}`);
@@ -586,6 +606,35 @@ async function saveNote() {
       loadContacts();
     }
   }, 700);
+}
+
+function editConvo(id) {
+  const cv = currentContactConvos.find(c => c.id === id);
+  if (!cv) return;
+  editingConvoId = id;
+  noteContactId = currentContactId;
+  noteReturnScreen = 'contact-detail';
+  document.getElementById('nf-date').value = cv.date;
+  document.getElementById('nf-note').value = cv.note;
+  document.getElementById('note-draft-status').textContent = '';
+  document.getElementById('note-form-msg').textContent = '';
+  document.getElementById('note-screen-title').textContent = 'Edit Conversation';
+  document.getElementById('nf-note').oninput = null;
+  showScreen('add-note');
+}
+
+async function deleteConvo(id) {
+  if (!confirm('Delete this conversation?')) return;
+  const { error } = await sb.from('71340_conversations').delete().eq('id', id);
+  if (error) { alert('Error: ' + error.message); return; }
+  await updateLastConvoDate(currentContactId);
+  loadContactDetail(currentContactId);
+}
+
+async function updateLastConvoDate(contactId) {
+  const { data } = await sb.from('71340_conversations').select('date').eq('contact_id', contactId).order('date', { ascending: false }).limit(1);
+  const lastDate = data && data.length ? data[0].date : null;
+  await sb.from('71340_contacts').update({ last_conversation_date: lastDate }).eq('id', contactId);
 }
 
 // ── Contact Form ──────────────────────────────────────────────────
