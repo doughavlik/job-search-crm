@@ -579,8 +579,12 @@ async function saveNote() {
 
   let error;
   if (editingConvoId) {
-    ({ error } = await sb.from('71340_conversations').update({ note, date }).eq('id', editingConvoId));
-    editingConvoId = null;
+    const convoId = editingConvoId;
+    ({ error } = await sb.from('71340_conversations').update({ note, date }).eq('id', convoId));
+    if (!error) {
+      localStorage.removeItem(`edit_draft_${convoId}`);
+      editingConvoId = null;
+    }
   } else {
     ({ error } = await sb.from('71340_conversations').insert({ contact_id: noteContactId, note, date }));
   }
@@ -615,11 +619,17 @@ function editConvo(id) {
   noteContactId = currentContactId;
   noteReturnScreen = 'contact-detail';
   document.getElementById('nf-date').value = cv.date;
-  document.getElementById('nf-note').value = cv.note;
-  document.getElementById('note-draft-status').textContent = '';
+  const editDraftKey = `edit_draft_${id}`;
+  const draft = localStorage.getItem(editDraftKey);
+  document.getElementById('nf-note').value = draft !== null ? draft : cv.note;
+  document.getElementById('note-draft-status').textContent = draft !== null ? 'Draft saved locally' : '';
   document.getElementById('note-form-msg').textContent = '';
   document.getElementById('note-screen-title').textContent = 'Edit Conversation';
-  document.getElementById('nf-note').oninput = null;
+  const noteInput = document.getElementById('nf-note');
+  noteInput.oninput = () => {
+    localStorage.setItem(editDraftKey, noteInput.value);
+    document.getElementById('note-draft-status').textContent = noteInput.value ? 'Draft saved locally' : '';
+  };
   showScreen('add-note');
 }
 
