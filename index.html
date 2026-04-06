@@ -271,7 +271,7 @@
       <textarea id="nf-note" placeholder="What did you talk about?"></textarea>
       <div id="note-draft-status" class="draft-status"></div>
     </div>
-    <button class="btn btn-primary" onclick="saveNote()">Save to Supabase</button>
+    <button class="btn btn-primary" id="note-save-btn" onclick="saveNote()">Save to Supabase</button>
     <div id="note-form-msg" class="error-msg" style="margin-top:8px"></div>
   </div>
 
@@ -577,6 +577,10 @@ async function saveNote() {
   if (!note) { msg.style.color = 'var(--danger)'; msg.textContent = 'Note cannot be empty.'; return; }
   if (!date) { msg.style.color = 'var(--danger)'; msg.textContent = 'Date is required.'; return; }
 
+  const saveBtn = document.getElementById('note-save-btn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+
   let error;
   if (editingConvoId) {
     const convoId = editingConvoId;
@@ -588,7 +592,12 @@ async function saveNote() {
   } else {
     ({ error } = await sb.from('71340_conversations').insert({ contact_id: noteContactId, note, date }));
   }
-  if (error) { msg.style.color = 'var(--danger)'; msg.textContent = error.message; return; }
+  if (error) {
+    msg.style.color = 'var(--danger)'; msg.textContent = error.message;
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save to Supabase';
+    return;
+  }
 
   await updateLastConvoDate(noteContactId);
 
