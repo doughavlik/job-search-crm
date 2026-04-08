@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Job Search CRM</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <style>
   :root {
     --primary: #2563eb;
@@ -127,7 +129,16 @@
   .convo-item { padding: 14px 0; border-bottom: 1px solid var(--gray-100); }
   .convo-item:last-child { border-bottom: none; }
   .convo-date { font-size: 13px; font-weight: 600; color: var(--gray-600); margin-bottom: 6px; }
-  .convo-note { font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+  .convo-note { font-size: 15px; line-height: 1.6; }
+  .convo-note p { margin-bottom: 8px; }
+  .convo-note p:last-child { margin-bottom: 0; }
+  .convo-note strong { font-weight: 700; }
+  .convo-note em { font-style: italic; }
+  .convo-note ul, .convo-note ol { padding-left: 20px; margin-bottom: 8px; }
+  .convo-note li { margin-bottom: 2px; }
+  .convo-note a { color: var(--primary); }
+  .convo-note code { background: var(--gray-100); border-radius: 3px; padding: 1px 4px; font-size: 13px; }
+  .convo-note h1, .convo-note h2, .convo-note h3 { font-weight: 700; margin-bottom: 6px; }
 
   /* Draft indicator */
   .draft-status {
@@ -525,7 +536,7 @@ async function loadContactDetail(id) {
             <button class="btn btn-sm btn-danger" onclick="deleteConvo('${cv.id}')">Delete</button>
           </div>
         </div>
-        <div class="convo-note">${esc(cv.note)}</div>
+        <div class="convo-note">${DOMPurify.sanitize(marked.parse(cv.note || ''))}</div>
       </div>
     `).join('');
   }
