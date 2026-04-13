@@ -1,13 +1,14 @@
 """
 Weekly follow-up digest — runs every Monday morning via GitHub Actions.
 Emails a list of all contacts due or overdue for a meeting this week.
+Also writes a markdown summary to the GitHub Actions job summary.
 
 Required environment variables (set as GitHub Actions secrets):
   SUPABASE_URL      — e.g. https://ifzcegsompgglmxmqulc.supabase.co
   SUPABASE_KEY      — service role key (bypasses RLS)
-  GMAIL_ADDRESS     — sender Gmail address
-  GMAIL_APP_PASSWORD — Gmail App Password (not your main password)
-  RECIPIENT_EMAIL   — where to send the digest (usually same as GMAIL_ADDRESS)
+  GMAIL_ADDRESS     — sender Gmail address (optional — only needed for email)
+  GMAIL_APP_PASSWORD — Gmail App Password (optional — only needed for email)
+  RECIPIENT_EMAIL   — where to send the digest (optional — only needed for email)
 """
 
 import os
@@ -18,16 +19,20 @@ from datetime import date, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-SUPABASE_URL = os.environ["SUPABASE_URL"]
-SUPABASE_KEY = os.environ["SUPABASE_KEY"]
-GMAIL_ADDRESS = os.environ["GMAIL_ADDRESS"]
-GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
-RECIPIENT_EMAIL = os.environ["RECIPIENT_EMAIL"]
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
+GMAIL_ADDRESS = os.environ.get("GMAIL_ADDRESS", "").strip()
+GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "").strip()
+RECIPIENT_EMAIL = os.environ.get("RECIPIENT_EMAIL", "").strip()
 
 THRESHOLD_DAYS = 42  # 6 weeks
 
 
 def query_supabase(path, params=""):
+    if not SUPABASE_URL:
+        raise ValueError("SUPABASE_URL is not set")
+    if not SUPABASE_KEY:
+        raise ValueError("SUPABASE_KEY is not set")
     url = f"{SUPABASE_URL}/rest/v1/{path}{params}"
     req = urllib.request.Request(url, headers={
         "apikey": SUPABASE_KEY,
@@ -35,6 +40,14 @@ def query_supabase(path, params=""):
     })
     with urllib.request.urlopen(req) as resp:
         return json.loads(resp.read())
+
+
+def write_github_summary(body):
+    """Write markdown to GitHub Actions step summary if running in Actions."""
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        with open(summary_path, "w") as f:
+            f.write(body)
 
 
 def main():
@@ -67,9 +80,10 @@ def main():
 
     if not overdue and not due_soon:
         print("No contacts due this week — no email sent.")
+        write_github_summary("## Weekly Follow-Up Digest\n\nNo contacts due this week.")
         return
 
-    # Build email body
+    # Build plain-text body
     lines = [f"Job Search CRM — Weekly Follow-Up Digest ({today.strftime('%B %d, %Y')})", "=" * 60, ""]
 
     if overdue:
@@ -98,7 +112,43 @@ def main():
     total = len(overdue) + len(due_soon)
     subject = f"[CRM] {total} contact{'s' if total != 1 else ''} need follow-up this week"
 
-    # Send email
+    # Always print digest to stdout
+    print(body)
+
+    # Build GitHub step summary in markdown
+    md_lines = [
+        f"## Weekly Follow-Up Digest — {today.strftime('%B %d, %Y')}",
+        "",
+    ]
+    if overdue:
+        md_lines.append(f"### Overdue ({len(overdue)} contact{'s' if len(overdue) != 1 else ''})")
+        for c, days in overdue:
+            company = c.get("company", {}) or {}
+            company_name = company.get("name", "") if company else ""
+            days_str = f"{days} days" if days is not None else "never contacted"
+            md_lines.append(f"- **{c['full_name']}**{' @ ' + company_name if company_name else ''} — {days_str} ago")
+        md_lines.append("")
+    if due_soon:
+        md_lines.append(f"### Due This Week ({len(due_soon)} contact{'s' if len(due_soon) != 1 else ''})")
+        for c, days in due_soon:
+            company = c.get("company", {}) or {}
+            company_name = company.get("name", "") if company else ""
+            days_str = f"{days} days"
+            md_lines.append(f"- **{c['full_name']}**{' @ ' + company_name if company_name else ''} — {days_str} ago")
+        md_lines.append("")
+    md_lines.append("[Open the app](https://doughavlik.github.io/job-search-crm/)")
+
+    write_github_summary("\n".join(md_lines))
+
+    # Send email only if Gmail credentials are configured
+    if not GMAIL_APP_PASSWORD:
+        print("GMAIL_APP_PASSWORD not set — skipping email, digest written to GitHub summary.")
+        return
+
+    if not GMAIL_ADDRESS or not RECIPIENT_EMAIL:
+        print("GMAIL_ADDRESS or RECIPIENT_EMAIL not set — skipping email.")
+        return
+
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = GMAIL_ADDRESS
@@ -109,7 +159,7 @@ def main():
         server.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
         server.sendmail(GMAIL_ADDRESS, RECIPIENT_EMAIL, msg.as_string())
 
-    print(f"Digest sent: {total} contacts listed.")
+    print(f"Digest sent via email: {total} contacts listed.")
 
 
 if __name__ == "__main__":
